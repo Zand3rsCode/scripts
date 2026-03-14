@@ -79,14 +79,18 @@ configure_docker_repo() {
   install_apt_packages ca-certificates curl gnupg
 
   $SUDO install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-    $SUDO gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  $SUDO chmod a+r /etc/apt/keyrings/docker.gpg
+  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+      $SUDO gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    $SUDO chmod a+r /etc/apt/keyrings/docker.gpg
+  fi
 
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  if [[ ! -f /etc/apt/sources.list.d/docker.list ]]; then
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" | \
-    $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
+      $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
+  fi
 
   apt_updated=0
   docker_repo_configured=1
@@ -101,14 +105,42 @@ configure_tailscale_repo() {
   echo "Configuring official Tailscale repository..."
   install_apt_packages ca-certificates curl
 
-  curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME}.noarmor.gpg" | \
-    $SUDO tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+  if [[ ! -f /usr/share/keyrings/tailscale-archive-keyring.gpg ]]; then
+    curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME}.noarmor.gpg" | \
+      $SUDO tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+  fi
 
-  curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME}.tailscale-keyring.list" | \
-    $SUDO tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+  if [[ ! -f /etc/apt/sources.list.d/tailscale.list ]]; then
+    curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME}.tailscale-keyring.list" | \
+      $SUDO tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+  fi
 
   apt_updated=0
   tailscale_repo_configured=1
+}
+
+docker_installed() {
+  dpkg -s docker-ce >/dev/null 2>&1
+}
+
+compose_installed() {
+  dpkg -s docker-compose-plugin >/dev/null 2>&1
+}
+
+tailscale_installed() {
+  dpkg -s tailscale >/dev/null 2>&1
+}
+
+btop_installed() {
+  dpkg -s btop >/dev/null 2>&1
+}
+
+omb_user_installed() {
+  [[ -d "$HOME/.oh-my-bash" ]]
+}
+
+omb_root_installed() {
+  $SUDO test -d /root/.oh-my-bash
 }
 
 echo "Ubuntu 24.04 interactive bootstrap"
@@ -177,37 +209,66 @@ if [[ "$install_docker" -eq 1 || "$install_compose" -eq 1 ]]; then
 fi
 
 if [[ "$install_docker" -eq 1 ]]; then
-  echo "Installing Docker Engine..."
-  apt_update_once
-  $SUDO apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
-  $SUDO systemctl enable --now docker
-  if getent group docker >/dev/null 2>&1; then
-    $SUDO usermod -aG docker "$USER" || true
+  if docker_installed; then
+    echo "Docker Engine already installed. Skipping."
+  else
+    echo "Installing Docker Engine..."
+    apt_update_once
+    $SUDO apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin
+    $SUDO systemctl enable --now docker
+    if getent group docker >/dev/null 2>&1; then
+      $SUDO usermod -aG docker "$USER" || true
+    fi
   fi
 fi
 
 if [[ "$install_compose" -eq 1 ]]; then
-  echo "Installing Docker Compose plugin..."
-  apt_update_once
-  $SUDO apt-get install -y docker-compose-plugin
+  if compose_installed; then
+    echo "Docker Compose plugin already installed. Skipping."
+  else
+    echo "Installing Docker Compose plugin..."
+    apt_update_once
+    $SUDO apt-get install -y docker-compose-plugin
+  fi
 fi
 
 if [[ "$install_tailscale" -eq 1 ]]; then
-  configure_tailscale_repo
-  echo "Installing Tailscale..."
-  apt_update_once
-  $SUDO apt-get install -y tailscale
-  $SUDO systemctl enable --now tailscaled
+  if tailscale_installed; then
+    echo "Tailscale already installed. Skipping."
+  else
+    configure_tailscale_repo
+    echo "Installing Tailscale..."
+    apt_update_once
+    $SUDO apt-get install -y tailscale
+    $SUDO systemctl enable --now tailscaled
+  fi
 fi
 
 if [[ "$install_btop" -eq 1 ]]; then
-  echo "Installing btop..."
-  install_apt_packages btop
+  if btop_installed; then
+    echo "btop already installed. Skipping."
+  else
+    echo "Installing btop..."
+    install_apt_packages btop
+  fi
 fi
 
 if [[ "$install_omb" -eq 1 ]]; then
-  echo "Installing Oh My Bash..."
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" --unattended
+  if omb_user_installed; then
+    echo "Oh My Bash already installed for user. Skipping."
+  else
+    echo "Installing Oh My Bash for user..."
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" --unattended
+  fi
+
+  if ask_yes_no "Install Oh My Bash for root as well?"; then
+    if omb_root_installed; then
+      echo "Oh My Bash already installed for root. Skipping."
+    else
+      echo "Installing Oh My Bash for root..."
+      $SUDO env HOME=/root bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)" --unattended
+    fi
+  fi
 fi
 
 echo
