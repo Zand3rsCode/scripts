@@ -40,7 +40,7 @@ ask_yes_no() {
   local prompt="$1"
   local reply
   while true; do
-    read -r -p "$prompt [y/N]: " reply
+    read -r -p "$prompt [y/N]: " reply < /dev/tty
     case "$reply" in
       [Yy]|[Yy][Ee][Ss]) return 0 ;;
       [Nn]|[Nn][Oo]|"") return 1 ;;
