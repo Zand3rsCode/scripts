@@ -14,6 +14,9 @@ if [[ "${EUID}" -eq 0 ]]; then
   exit 1
 fi
 
+# shellcheck disable=SC1091
+source /etc/os-release
+
 if [[ ! -f /etc/os-release ]]; then
   echo "Cannot detect operating system."
   exit 1
@@ -22,7 +25,9 @@ fi
 # shellcheck disable=SC1091
 source /etc/os-release
 
-if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID%%.*}" -lt 24 ]]; then
+major_version="${VERSION_ID%%.*}"
+
+if [[ "${ID:-}" != "ubuntu" || ! "$major_version" =~ ^[0-9]+$ || "$major_version" -lt 24 ]]; then
   echo "This script is intended for Ubuntu 24.04 or newer."
   echo "Detected: ${PRETTY_NAME:-unknown}"
   exit 1
