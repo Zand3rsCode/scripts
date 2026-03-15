@@ -22,7 +22,7 @@ fi
 # shellcheck disable=SC1091
 source /etc/os-release
 
-if [[ "${ID:-}" != "ubuntu" || ( "${VERSION_CODENAME:-}" != "noble" && "${VERSION_CODENAME:-}" != "oracular" ) ]]; then
+if [[ "${ID:-}" != "ubuntu" || ( "${VERSION_CODENAME:-}" != "noble" && "${VERSION_CODENAME:-}" != "plucky" ) ]]; then
   echo "This script is intended for Ubuntu 24.04 or Ubuntu 25."
   echo "Detected: ${PRETTY_NAME:-unknown}"
   exit 1
